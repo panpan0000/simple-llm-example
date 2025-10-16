@@ -103,7 +103,8 @@ if prefill:
     pmat("K", K)
     pmat("V", V)
 
-    # 3️⃣ 注意力计算：scores ∈ [T, T]
+    # 3️⃣ 注意力计算： Attention(Q, K, V) = softmax( (Q @ K.T) / sqrt(d_k) ) @ V
+    # scores ∈ [T, T]
     scores = Q @ K.T / np.sqrt(embed_dim)
     mask = np.tril(np.ones((T, T)))  # 因果掩码：屏蔽未来位置（上三角）
     scores = np.where(mask==1, scores, -1e9)
@@ -113,17 +114,17 @@ if prefill:
     scores_stable = scores - scores.max(axis=-1, keepdims=True)
     attn = np.exp(scores_stable)
     attn = attn / attn.sum(axis=-1, keepdims=True)
-    pmat("Attention weights", attn)
+    pmat("Attention weights", attn) #计算权重 (Attention Weights): attn = softmax( (Q @ K.T) / sqrt(d_k) )
 
     # 4️⃣ 聚合得到上下文并线性映射到嵌入空间
-    context = attn @ V              # [T, d]
+    context = attn @ V              # [T, d] #加权求和 (Weighted Sum)
     attn_out = context @ Wo         # [T, d]
     #pmat("Context", context)
-    pmat("Attn out", attn_out)
+    pmat("Attn out", attn_out) #最终注意力
 
     # 5️⃣ 残差 + FFN（两层 MLP），逐位置处理
-    y1 = X + attn_out
-    ffn_hidden = np.maximum(0, y1 @ Wff1)
+    y1 = X + attn_out                           #残差连接（skip connection）： y1 = X + attn_out 把注意力的输出当作对原表示 X 的“增量”，而不是完全替代。
+    ffn_hidden = np.maximum(0, y1 @ Wff1)        #ffn_hidden = ReLU(y1 @ Wff1)
     ffn_out = ffn_hidden @ Wff2
     y2 = y1 + ffn_out
     #pmat("y1 = X + AttnOut", y1)
